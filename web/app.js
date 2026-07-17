@@ -1594,7 +1594,7 @@ function init() {
   // typing in a field or holding modifiers, so normal typing never trips it.
   document.addEventListener("keydown", (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
-    if (e.target.closest("input, textarea, select")) return;
+    if (e.target && e.target.closest && e.target.closest("input, textarea, select")) return;
     if (e.key === "t" || e.key === "T") {
       e.preventDefault();
       if (state.wake) { disableVoice(); toast("Microphone OFF — press T to re-enable"); }
