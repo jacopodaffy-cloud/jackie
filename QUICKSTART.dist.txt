@@ -1,0 +1,32 @@
+========================================
+  JARVIS — Windows app  ·  Quick start
+========================================
+
+Nothing to install. Everything is inside this folder.
+
+1) DOUBLE-CLICK  "Jarvis.exe"  (in this folder).
+   • It opens the J.A.R.V.I.S dashboard in your web browser.
+   • If Windows shows a blue "Windows protected your PC" box, click
+     "More info"  ->  "Run anyway"  (it's just unsigned, not unsafe).
+
+2) Click the gear (top-right) -> paste your API key -> Save -> Test key.
+   Get a FREE key here:  https://openrouter.ai/keys
+   (One free key = Qwen3 + GLM + DeepSeek + Llama.)
+
+3) Use JARVIS:
+   • Type a command in the Conversation box, or click the mic and speak.
+   • Turn on "Clap / voice wake" in Settings to wake it by clapping twice.
+   • Because you launched the .exe, JARVIS can control this PC for real:
+        "open notepad"
+        "build a snake game in HTML and open it in my browser"
+        "what's my CPU and how much RAM is free?"
+
+Notes
+-----
+• Your key is saved in ".env" next to Jarvis.exe. It never leaves your PC.
+• Files JARVIS creates (games, scripts) go in the "workspace" folder here.
+• Keep every file in this folder together - Jarvis.exe needs them.
+• Prefer no download? Open the web version (chat + dashboard only):
+      https://jacopodaffy-cloud.github.io/jarvis/
+
+Source code:  https://github.com/jacopodaffy-cloud/jarvis

@@ -1,0 +1,30 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Jarvis generated files
+workspace/*
+!workspace/.gitkeep
+
+# PyInstaller build artifacts (built on demand / by CI)
+build/
+dist/
+*.spec
+*.zip
+
+# OS / editor
+.DS_Store
+Thumbs.db
+
+# Personal local database (long-term memory, tasks, notifications)
+data/
+
+# Local runtime logs
+logs/
+jarvis_error.log
