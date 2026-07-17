@@ -15,7 +15,15 @@ dual-channel transient detection), or just type.
 
 ## 📱 Use Jackie on your phone (like Hey Google)
 
-Open **<https://jacopodaffy-cloud.github.io/jackie/>** on your phone, then:
+**Easiest — download the Android app:** grab **`Jackie.apk`** from the
+**[Releases page](https://github.com/jacopodaffy-cloud/jackie/releases/latest)**
+on your phone, open it, allow *install unknown apps* when Android asks, done.
+Open Jackie, tap the mic, speak — "Hey Jackie" works while the app is open.
+(Android can't grant always-on background wake words to normal apps — that
+stays a Google/Siri privilege.)
+
+**Or install it as a PWA** — open
+**<https://jacopodaffy-cloud.github.io/jackie/>** on your phone, then:
 
 - **Android / Chrome**: menu ⋮ → **Add to Home screen** → *Install*
 - **iPhone / Safari**: Share → **Add to Home Screen**
@@ -37,10 +45,20 @@ Jackie.bat            # first run creates the venv and installs everything
 ```
 
 - **`Jackie.bat`** — opens the dashboard with full computer control.
-- **`Jackie Clap Listener.bat`** — background listener: double-clap anywhere
-  and Jackie opens. Put a shortcut to it in `shell:startup` (run
-  `pythonw clap_launcher.py` for a windowless start) and Jackie greets you at
-  every boot.
+- **`Jackie Clap Listener.bat`** — the background listener. It starts the
+  backend **silently** at boot (no window!), registers global hotkeys, and
+  listens for claps. Put a shortcut in `shell:startup` (target
+  `pythonw clap_launcher.py` for a windowless start).
+
+**Hotkeys** (change in `.env` — combos like `ctrl+alt+l` work too):
+
+| Key | Action |
+|---|---|
+| **L** | open Jackie — the ONLY thing that opens the window |
+| **T** | microphone off / on (background; inside the dashboard T toggles its own mic) |
+
+Closing the dashboard keeps it closed: claps and boot never open a window —
+a double clap only wakes the dashboard when it's **already open**.
 - **`Clap Test.bat`** — see exactly what your microphone hears and calibrate.
 - **`Mic Check.bat`** — full microphone diagnosis (privacy, mute, levels).
 

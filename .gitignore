@@ -28,3 +28,7 @@ data/
 # Local runtime logs
 logs/
 jarvis_error.log
+
+# Android signing (local backup only - never commit)
+signing/
+android.keystore

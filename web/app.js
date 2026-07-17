@@ -250,6 +250,8 @@ function snapshot() {
 const hand = {
   active: false, hands: null, timer: 0, pinched: false,
   startY: 0, scrollEl: null, moved: false,
+  sx: 0, sy: 0, haveCursor: false,      // smoothed cursor position
+  pinchAt: 0, lastClick: 0, lastSeen: 0, // gesture timing (debounce/hold)
 };
 const MP_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/hands/";
 
@@ -275,10 +277,10 @@ async function toggleHandTracking() {
   if (!hand.hands) {
     hand.hands = new Hands({ locateFile: (f) => MP_URL + f });
     hand.hands.setOptions({ maxNumHands: 1, modelComplexity: 0,
-      minDetectionConfidence: 0.6, minTrackingConfidence: 0.5 });
+      minDetectionConfidence: 0.7, minTrackingConfidence: 0.6 });
     hand.hands.onResults(onHandResults);
   }
-  hand.active = true;
+  hand.active = true; hand.haveCursor = false; hand.pinched = false;
   $("#camHand").classList.add("active");
   $("#handCursor").classList.remove("hidden");
   $("#camNote").textContent = "Gesture control on — point to move, pinch to click, pinch + move to scroll.";
@@ -286,8 +288,10 @@ async function toggleHandTracking() {
   (async function pump() {
     if (!hand.active) return;
     const v = $("#camVideo");
-    if (v.readyState >= 2) { try { await hand.hands.send({ image: v }); } catch {} }
-    hand.timer = setTimeout(pump, 66);                // ~15 fps, easy on the CPU
+    if (v.readyState >= 2 && !document.hidden) {
+      try { await hand.hands.send({ image: v }); } catch {}
+    }
+    hand.timer = setTimeout(pump, 33);                // ~30 fps — smooth cursor
   })();
 }
 function stopHandTracking() {
@@ -312,30 +316,64 @@ function scrollableAt(x, y) {
 
 function onHandResults(res) {
   const cur = $("#handCursor");
+  const now = performance.now();
   const lm = res.multiHandLandmarks && res.multiHandLandmarks[0];
-  if (!lm) { cur.classList.add("idle"); return; }
+  if (!lm) {
+    // Hand gone: fade the cursor and NEVER leave a pinch stuck half-way
+    // (a stuck pinch used to click whatever the cursor reappeared on).
+    if (now - hand.lastSeen > 250) {
+      cur.classList.add("idle");
+      hand.pinched = false; cur.classList.remove("pinch");
+      hand.haveCursor = false;
+    }
+    return;
+  }
+  hand.lastSeen = now;
   cur.classList.remove("idle");
+
   const tip = lm[8], thumb = lm[4];                   // index fingertip + thumb tip
-  const x = (1 - tip.x) * innerWidth;                 // mirror: it's a selfie view
-  const y = tip.y * innerHeight;
+  const rx = (1 - tip.x) * innerWidth;                // mirror: it's a selfie view
+  const ry = tip.y * innerHeight;
+
+  // Adaptive smoothing (One-Euro style): heavy when the hand hovers (kills
+  // jitter), light when it moves fast (no lag) — this is what makes the
+  // cursor feel glued to your finger instead of trembling around it.
+  if (!hand.haveCursor) { hand.sx = rx; hand.sy = ry; hand.haveCursor = true; }
+  const speed = Math.hypot(rx - hand.sx, ry - hand.sy);
+  const alpha = Math.min(0.85, 0.12 + speed / 120);
+  hand.sx += (rx - hand.sx) * alpha;
+  hand.sy += (ry - hand.sy) * alpha;
+  const x = hand.sx, y = hand.sy;
   cur.style.transform = `translate(${x}px, ${y}px)`;
-  const pinch = Math.hypot(tip.x - thumb.x, tip.y - thumb.y) < 0.055;
+
+  // Pinch normalized by HAND SIZE (wrist → middle-finger knuckle), so it
+  // works at any distance from the camera, with hysteresis so the state
+  // can't flicker at the boundary.
+  const size = Math.hypot(lm[0].x - lm[9].x, lm[0].y - lm[9].y) || 0.001;
+  const ratio = Math.hypot(tip.x - thumb.x, tip.y - thumb.y) / size;
+  const pinch = hand.pinched ? ratio < 0.42 : ratio < 0.30;
 
   if (pinch && !hand.pinched) {                       // pinch start
     hand.pinched = true; hand.moved = false; hand.startY = y;
+    hand.pinchAt = now;
     hand.scrollEl = scrollableAt(x, y);
     cur.classList.add("pinch");
   } else if (pinch && hand.pinched) {                 // held: drag = scroll
     const dy = y - hand.startY;
-    if (Math.abs(dy) > 10 && hand.scrollEl) {
-      hand.scrollEl.scrollTop -= dy; hand.startY = y; hand.moved = true;
+    if (Math.abs(dy) > 14 && hand.scrollEl) {
+      hand.scrollEl.scrollTop -= dy * 1.15; hand.startY = y; hand.moved = true;
     }
   } else if (!pinch && hand.pinched) {                // release: click if not a drag
     hand.pinched = false;
     cur.classList.remove("pinch");
-    if (!hand.moved) {
+    const held = now - hand.pinchAt;
+    // A valid click is a DELIBERATE pinch: held ≥70 ms (rejects one-frame
+    // flickers), released within 1.2 s (longer = you were scrolling), not a
+    // drag, and ≥400 ms after the previous click (no double-fires).
+    if (!hand.moved && held >= 70 && held <= 1200 && now - hand.lastClick > 400) {
       const el = document.elementFromPoint(x, y);
       if (el) {
+        hand.lastClick = now;
         cur.classList.add("clicked");
         setTimeout(() => cur.classList.remove("clicked"), 250);
         el.click();
@@ -503,6 +541,14 @@ async function enableVoice() {
     voice.micStream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
     });
+    // If the OS yanks the device (unplug, driver reset, Bluetooth drop) the
+    // track just ends — recover automatically instead of going silently deaf.
+    voice.micStream.getTracks().forEach((tr) => (tr.onended = () => {
+      if (!state.wake) return;
+      toast("Mic device lost — reconnecting…");
+      disableVoice();
+      setTimeout(() => enableVoice(), 1200);
+    }));
   } catch {
     toast("Microphone blocked — allow mic access to use clap/voice.");
     state.wake = false; store.set("wake", false); $("#wakeToggle").checked = false;
@@ -564,7 +610,12 @@ function disableVoice() {
 function startClapListening() {
   if (!voice.micStream) return;
   voice.mode = "clap";
-  if (!voice.ctx) voice.ctx = new (window.AudioContext || window.webkitAudioContext)();
+  if (!voice.ctx) {
+    voice.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    voice.ctx.onstatechange = () => {   // self-heal a suspended graph
+      if (voice.ctx.state === "suspended" && state.wake) voice.ctx.resume();
+    };
+  }
   if (voice.ctx.state === "suspended") voice.ctx.resume();
   if (!voice.src) { voice.src = voice.ctx.createMediaStreamSource(voice.micStream);
     voice.analyser = voice.ctx.createAnalyser(); voice.analyser.fftSize = 512;
@@ -1538,6 +1589,18 @@ function init() {
   $("#camSnap").onclick = snapshot;
   $("#camHand").onclick = toggleHandTracking;
   $("#btnKeyboard").onclick = () => $("#chatText").focus();
+
+  // T toggles the microphone (same key as the desktop hotkey). Ignored while
+  // typing in a field or holding modifiers, so normal typing never trips it.
+  document.addEventListener("keydown", (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+    if (e.target.closest("input, textarea, select")) return;
+    if (e.key === "t" || e.key === "T") {
+      e.preventDefault();
+      if (state.wake) { disableVoice(); toast("Microphone OFF — press T to re-enable"); }
+      else enableVoice().then((ok) => { if (ok) toast("Microphone ON — listening"); });
+    }
+  });
   document.querySelectorAll("[data-refresh]").forEach((b) =>
     b.onclick = () => ({ weather: refreshWeather, news: refreshNews, stats: refreshStats }[b.dataset.refresh] || refreshStats)());
 
