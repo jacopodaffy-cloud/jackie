@@ -34,7 +34,13 @@ jobs:
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android.keystore
 
       - name: Point Bubblewrap at the runner's JDK and Android SDK
+        # Bubblewrap validates the SDK by looking for the LEGACY <sdk>/tools
+        # folder (it's what its own installer creates). Modern SDKs ship
+        # cmdline-tools/latest instead — a symlink bridges the two layouts.
         run: |
+          ln -sfn "$ANDROID_HOME/cmdline-tools/latest" "$ANDROID_HOME/tools" \
+            || sudo ln -sfn "$ANDROID_HOME/cmdline-tools/latest" "$ANDROID_HOME/tools"
+          ls -la "$ANDROID_HOME/tools/bin/sdkmanager"
           mkdir -p ~/.bubblewrap
           printf '{"jdkPath":"%s","androidSdkPath":"%s"}' "$JAVA_HOME" "$ANDROID_HOME" \
             > ~/.bubblewrap/config.json
